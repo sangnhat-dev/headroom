@@ -21,11 +21,16 @@ Usage:
     # Save results as new baseline
     python benchmarks/run_benchmarks.py --save-baseline baseline.json
 
+    # Quality & token-reduction benchmark (no API key required)
+    python benchmarks/run_benchmarks.py --suite quality --output benchmarks/QUALITY_RESULTS.md
+
 Available Suites:
-    all         - Run all benchmark suites (transforms + relevance)
+    all         - Run all benchmark suites (transforms + relevance + tool-safety)
     latency     - Compression overhead & cost-benefit analysis (standalone)
+    quality     - Output quality & token reduction with/without Headroom (standalone)
     transforms  - SmartCrusher, CacheAligner, RollingWindow
     relevance   - BM25Scorer, HybridScorer
+    tool-safety - ToolCrusher & SmartCrusher on tool-use edge cases
     crusher     - SmartCrusher only
     window      - RollingWindow only
     pipeline    - Full transform pipeline
@@ -49,6 +54,7 @@ BENCHMARK_SUITES = {
         "benchmarks/bench_tool_use_safety.py",
     ],
     "latency": [],  # Standalone script: python benchmarks/bench_latency.py
+    "quality": [],  # Standalone script: python benchmarks/bench_quality.py
     "transforms": [
         "benchmarks/bench_transforms.py",
     ],
@@ -375,6 +381,18 @@ def main() -> int:
         if args.verbose:
             cmd.append("-v")
         print("Delegating to latency benchmark script...")
+        return subprocess.run(cmd).returncode
+
+    # Quality suite is a standalone script, not pytest-benchmark
+    if args.suite == "quality":
+        cmd = [sys.executable, "benchmarks/bench_quality.py"]
+        if args.output:
+            cmd.extend(["--output", args.output])
+        if json_output:
+            cmd.extend(["--json", json_output])
+        if args.verbose:
+            cmd.append("-v")
+        print("Delegating to quality benchmark script...")
         return subprocess.run(cmd).returncode
 
     # Run benchmarks
