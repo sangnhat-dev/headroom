@@ -8,11 +8,11 @@ Comprehensive tests covering:
 """
 
 import json
+from unittest.mock import Mock
 
 import pytest
 
 from headroom import (
-    OpenAIProvider,
     RelevanceScorerConfig,
     SmartCrusherConfig,
     Tokenizer,
@@ -28,20 +28,26 @@ from headroom.transforms.smart_crusher import (
 # Test Fixtures
 # =============================================================================
 
-# Create a shared provider for tests
-_provider = OpenAIProvider()
 
-
-def get_tokenizer(model: str = "gpt-4o") -> Tokenizer:
-    """Get a tokenizer for tests using OpenAI provider."""
-    token_counter = _provider.get_token_counter(model)
-    return Tokenizer(token_counter, model)
+def make_mock_tokenizer(chars_per_token: int = 4) -> Tokenizer:
+    """Create a mock tokenizer that works without network access."""
+    counter = Mock()
+    counter.count_text = Mock(side_effect=lambda text: max(1, len(text) // chars_per_token))
+    counter.count_message = Mock(
+        side_effect=lambda msg: max(1, len(str(msg.get("content", ""))) // chars_per_token)
+    )
+    counter.count_messages = Mock(
+        side_effect=lambda msgs: sum(
+            max(1, len(str(m.get("content", ""))) // chars_per_token) for m in msgs
+        )
+    )
+    return Tokenizer(counter, "mock-model")
 
 
 @pytest.fixture
 def tokenizer():
-    """Provide a tokenizer for tests."""
-    return get_tokenizer()
+    """Provide a mock tokenizer for tests."""
+    return make_mock_tokenizer()
 
 
 @pytest.fixture
@@ -64,8 +70,8 @@ def analyzer(default_config):
 
 @pytest.fixture
 def crusher(default_config):
-    """SmartCrusher instance for testing."""
-    return SmartCrusher(default_config)
+    """SmartCrusher instance for testing (uses BM25 to avoid network dependency)."""
+    return SmartCrusher(default_config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
 
 # =============================================================================
@@ -392,7 +398,7 @@ class TestSmartCrusher:
             enabled=True,
             min_tokens_to_crush=1000,  # High threshold
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         assert not crusher.should_apply(messages, tokenizer)
 
@@ -407,7 +413,7 @@ class TestSmartCrusher:
             enabled=True,
             min_tokens_to_crush=0,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         assert not crusher.should_apply(messages, tokenizer)
 
@@ -424,7 +430,7 @@ class TestSmartCrusher:
             min_tokens_to_crush=0,
             min_items_to_analyze=10,  # Array too small
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         assert not crusher.should_apply(messages, tokenizer)
 
@@ -459,7 +465,7 @@ class TestSmartCrusher:
             max_items_after_crush=15,
             preserve_change_points=True,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -493,7 +499,7 @@ class TestSmartCrusher:
             min_items_to_analyze=3,
             max_items_after_crush=10,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -523,7 +529,7 @@ class TestSmartCrusher:
             min_items_to_analyze=3,
             max_items_after_crush=10,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -555,7 +561,7 @@ class TestSmartCrusher:
             min_items_to_analyze=3,
             max_items_after_crush=10,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -591,7 +597,7 @@ class TestSmartCrusher:
             max_items_after_crush=10,
             variance_threshold=2.0,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -619,7 +625,7 @@ class TestSmartCrusher:
             min_items_to_analyze=3,
             max_items_after_crush=10,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -659,7 +665,7 @@ class TestSmartCrusher:
             min_items_to_analyze=3,
             max_items_after_crush=10,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -707,7 +713,7 @@ class TestSmartCrusher:
             min_items_to_analyze=3,
             max_items_after_crush=15,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -753,7 +759,7 @@ class TestRelevanceScoring:
         ]
 
         config = SmartCrusherConfig(enabled=True, min_tokens_to_crush=0)
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         context = crusher._extract_context_from_messages(messages)
 
@@ -783,7 +789,7 @@ class TestRelevanceScoring:
         ]
 
         config = SmartCrusherConfig(enabled=True, min_tokens_to_crush=0)
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         context = crusher._extract_context_from_messages(messages)
 
@@ -900,7 +906,7 @@ class TestEdgeCases:
             enabled=True,
             min_tokens_to_crush=0,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -928,7 +934,7 @@ class TestEdgeCases:
             min_items_to_analyze=3,
             max_items_after_crush=10,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -970,7 +976,7 @@ class TestEdgeCases:
             min_items_to_analyze=3,
             max_items_after_crush=10,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         # Check should_apply works
         assert crusher.should_apply(messages, tokenizer)
@@ -1017,7 +1023,7 @@ class TestEdgeCases:
             min_items_to_analyze=3,
             max_items_after_crush=10,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         # Check should_apply works
         assert crusher.should_apply(messages, tokenizer)
@@ -1040,7 +1046,7 @@ class TestEdgeCases:
         ]
 
         config = SmartCrusherConfig(enabled=True, min_tokens_to_crush=0)
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -1061,7 +1067,7 @@ class TestEdgeCases:
             min_tokens_to_crush=0,
             min_items_to_analyze=3,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         # Should not crash, but won't crush non-dict arrays
         result = crusher.apply(messages, tokenizer)
@@ -1090,7 +1096,7 @@ class TestEdgeCases:
             min_items_to_analyze=3,
             max_items_after_crush=10,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -1125,7 +1131,7 @@ class TestEdgeCases:
             min_items_to_analyze=3,
             max_items_after_crush=10,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -1153,7 +1159,7 @@ class TestEdgeCases:
             min_items_to_analyze=3,
             max_items_after_crush=10,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -1179,7 +1185,7 @@ class TestEdgeCases:
             min_items_to_analyze=3,
             max_items_after_crush=10,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -1202,7 +1208,7 @@ class TestEdgeCases:
             min_items_to_analyze=3,
             max_items_after_crush=10,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -1297,7 +1303,7 @@ class TestSmartCrusherIntegration:
             min_items_to_analyze=3,
             max_items_after_crush=10,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 
@@ -1345,7 +1351,7 @@ class TestSmartCrusherIntegration:
             max_items_after_crush=15,
             preserve_change_points=True,
         )
-        crusher = SmartCrusher(config)
+        crusher = SmartCrusher(config, relevance_config=RelevanceScorerConfig(tier="bm25"))
 
         result = crusher.apply(messages, tokenizer)
 

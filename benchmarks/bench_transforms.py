@@ -29,6 +29,8 @@ import json
 
 import pytest
 
+from headroom.config import RelevanceScorerConfig
+
 
 class TestSmartCrusherBenchmarks:
     """Benchmarks for SmartCrusher statistical compression.
@@ -47,10 +49,13 @@ class TestSmartCrusherBenchmarks:
 
     @pytest.fixture
     def crusher(self, smart_crusher_config):
-        """Create SmartCrusher instance."""
+        """Create SmartCrusher instance using BM25 (no network dependency)."""
         from headroom.transforms.smart_crusher import SmartCrusher
 
-        return SmartCrusher(config=smart_crusher_config)
+        return SmartCrusher(
+            config=smart_crusher_config,
+            relevance_config=RelevanceScorerConfig(tier="bm25"),
+        )
 
     def test_compress_100_items(
         self,
@@ -524,7 +529,7 @@ class TestTransformPipelineBenchmarks:
     def pipeline(
         self, smart_crusher_config, cache_aligner_config, rolling_window_config, mock_provider
     ):
-        """Create transform pipeline."""
+        """Create transform pipeline using BM25 (no network dependency)."""
         from headroom.transforms.cache_aligner import CacheAligner
         from headroom.transforms.pipeline import TransformPipeline
         from headroom.transforms.rolling_window import RollingWindow
@@ -533,7 +538,10 @@ class TestTransformPipelineBenchmarks:
         return TransformPipeline(
             transforms=[
                 CacheAligner(cache_aligner_config),
-                SmartCrusher(smart_crusher_config),
+                SmartCrusher(
+                    smart_crusher_config,
+                    relevance_config=RelevanceScorerConfig(tier="bm25"),
+                ),
                 RollingWindow(rolling_window_config),
             ],
             provider=mock_provider,
