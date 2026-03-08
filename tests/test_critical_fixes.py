@@ -13,6 +13,8 @@ from unittest.mock import patch
 
 import pytest
 
+from headroom.config import RelevanceScorerConfig
+
 
 class TestTOINConfidenceMathFix:
     """Test for CRITICAL: Confidence calculation math error in toin.py:721.
@@ -326,7 +328,9 @@ class TestSmartCrusherTOINIntegration:
             max_items_after_crush=10,
             use_feedback_hints=True,
         )
-        crusher = SmartCrusher(config)
+        # Use BM25-only scoring to avoid network access for embedding model downloads
+        bm25_config = RelevanceScorerConfig(tier="bm25")
+        crusher = SmartCrusher(config, relevance_config=bm25_config)
 
         # Create test items that look like search results with a clear score field
         # This pattern is crushable because:
@@ -400,7 +404,9 @@ class TestAllFixesIntegrated:
             max_items_after_crush=10,
             use_feedback_hints=True,
         )
-        crusher = SmartCrusher(config)
+        # Use BM25-only scoring to avoid network access for embedding model downloads
+        bm25_config = RelevanceScorerConfig(tier="bm25")
+        crusher = SmartCrusher(config, relevance_config=bm25_config)
 
         # Create test items that look like API responses with scoring
         # This pattern is crushable because:

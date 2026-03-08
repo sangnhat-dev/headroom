@@ -3288,7 +3288,8 @@ class SmartCrusher(Transform):
         # 1. TOP N by score FIRST (the primary relevance signal)
         # The original system's score field is the authoritative ranking
         scored_items = [(i, item.get(score_field, 0)) for i, item in enumerate(items)]
-        scored_items.sort(key=lambda x: x[1], reverse=True)
+        # None/null scores sort as lowest priority (float('-inf'))
+        scored_items.sort(key=lambda x: x[1] if x[1] is not None else float("-inf"), reverse=True)
 
         # Reserve slots for outliers
         top_count = max(0, effective_max - 3)
